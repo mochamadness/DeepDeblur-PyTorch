@@ -11,6 +11,7 @@ import imageio
 import torch
 import torch.multiprocessing as mp
 
+import cv2
 # debugging tools
 def interact(local=None):
     """interactive console with autocomplete function. Useful for debugging.
@@ -80,8 +81,14 @@ def int2str(val):
     else:
         raise argparse.ArgumentTypeError('number value expected')
 
+def BGR_to_RGB(cvimg):
+    pilimg = cvimg.copy()
+    pilimg[:, :, 0] = cvimg[:, :, 2]
+    pilimg[:, :, 2] = cvimg[:, :, 0]
+    return pilimg
 
 # image saver using multiprocessing queue
+'''
 class MultiSaver():
     def __init__(self, result_dir=None):
         self.queue = None
@@ -155,6 +162,92 @@ class MultiSaver():
             output_img = output_img.add_(0.5).clamp_(0, 255).permute(1, 2, 0).to('cpu', torch.uint8).numpy()
 
             save_name = os.path.join(result_dir, save_name)
+            save_dir = os.path.dirname(save_name)
+            os.makedirs(save_dir, exist_ok=True)
+
+            self.queue.put((output_img, save_name))
+
+        return
+'''
+
+class MultiSaver():
+    @staticmethod
+    def t(queue):
+        while True:
+            if queue.empty():
+                continue
+            img, name = queue.get()
+            if name:
+                try:
+                    basename, ext = os.path.splitext(name)
+                    if ext != '.png':
+                        name = '{}.png'.format(basename)
+                    imageio.imwrite(name, img)
+                except Exception as e:
+                    print(e)
+            else:
+                return
+
+    def __init__(self, result_dir=None):
+        self.queue = None
+        self.process = None
+        self.result_dir = result_dir
+
+
+
+    def begin_background(self):
+        self.queue = mp.Queue()
+        worker = lambda: mp.Process(target=MultiSaver.t, args=(self.queue,), daemon=False)
+        cpu_count = min(8, mp.cpu_count() - 1)
+        self.process = [worker() for _ in range(cpu_count)]
+        for p in self.process:
+            p.start()
+
+    def end_background(self):
+        if self.queue is None:
+            return
+
+        for _ in self.process:
+            self.queue.put((None, None))
+
+    def join_background(self):
+        if self.queue is None:
+            return
+
+        while not self.queue.empty():
+            time.sleep(0.5)
+
+        for p in self.process:
+            p.join()
+
+        self.queue = None
+
+    def save_image(self, output, save_names, result_dir=None):
+        result_dir = result_dir if self.result_dir is None else self.result_dir
+        if result_dir is None:
+            raise Exception('no result dir specified!')
+
+        if self.queue is None:
+            try:
+                self.begin_background()
+            except Exception as e:
+                print(e)
+                return
+
+        # assume NCHW format
+        if output.ndim == 2:
+            output = output.expand([1, 1] + list(output.shape))
+        elif output.ndim == 3:
+            output = output.expand([1] + list(output.shape))
+
+        for output_img, save_name in zip(output, save_names):
+            # assume image range [0, 255]
+            output_img = output_img.add_(0.5).clamp_(0, 255).permute(1, 2, 0).to('cpu', torch.uint8).numpy()
+
+            save_name = os.path.join(result_dir, save_name)
+            isWritten = cv2.imwrite(save_name, BGR_to_RGB(output_img))
+            if isWritten:
+                print('The image is successfully saved.')
             save_dir = os.path.dirname(save_name)
             os.makedirs(save_dir, exist_ok=True)
 

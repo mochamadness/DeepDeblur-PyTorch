@@ -140,7 +140,7 @@ def generate_pyramid(*args, n_scales):
     def _generate_pyramid(img):
         if img.dtype != np.float32:
             img = img.astype(np.float32)
-        pyramid = list(pyramid_gaussian(img, n_scales-1, multichannel=True))
+        pyramid = list(pyramid_gaussian(img, max_layer=n_scales-1, channel_axis=-1))
 
         return pyramid
 
