@@ -1,6 +1,6 @@
 import os
 from tqdm import tqdm
-import cv2
+
 import torch
 
 import data.common
@@ -118,74 +118,7 @@ class Trainer():
             self.save(epoch)
 
         return
-    def cunts(self, epoch, input_img, pad_width):
-        self.epoch = epoch
 
-        self.model.eval()
-        self.model.to(dtype=self.dtype_eval)
-
-        self.criterion.epoch = epoch
-
-        self.imsaver.join_background()
-        input = data.common.to(
-                input_img, device=self.device, dtype=self.dtype_eval)
-        with amp.autocast(self.args.amp):
-            output = self.model(input)
-        #pad_width = batch[2]
-        output[0], _ = data.common.pad(output[0], pad_width=pad_width, negative=True)
-        if isinstance(output, (list, tuple)):
-            result = output[0]  # select last output in a pyramid
-        elif isinstance(output, torch.Tensor):
-            result = output
-        self.imsaver.save_image(result, ['shit.png'])
-
-
-    def fuckingaround(self, epoch, mode='val'):
-        self.mode = mode
-        self.epoch = epoch
-
-        self.model.eval()
-        self.model.to(dtype=self.dtype_eval)
-
-        if mode == 'val':
-            self.criterion.validate()
-        elif mode == 'test':
-            self.criterion.test()
-        self.criterion.epoch = epoch
-
-        self.imsaver.join_background()
-
-        if self.is_slave:
-            tq = self.loaders[self.mode]
-        else:
-            tq = tqdm(self.loaders[self.mode], ncols=80, smoothing=0, bar_format='{desc}|{bar}{r_bar}')
-
-        compute_loss = True
-        torch.set_grad_enabled(False)
-        print('im not fucking aroundhere')
-        for idx, batch in enumerate(tq):
-            input, target = data.common.to(
-                batch[0], batch[1], device=self.device, dtype=self.dtype_eval)
-            print(batch[0][0].shape)
-
-    def BGR_to_RGB(cvimg):
-        pilimg = cvimg.copy()
-        pilimg[:, :, 0] = cvimg[:, :, 2]
-        pilimg[:, :, 2] = cvimg[:, :, 0]
-        return pilimg
-    
-    def change_result(self, output):
-        # assume NCHW format
-        if output.ndim == 2:
-            output = output.expand([1, 1] + list(output.shape))
-        elif output.ndim == 3:
-            output = output.expand([1] + list(output.shape))
-
-        output_img = output.add_(0.5).clamp_(0, 255).permute(1, 2, 0).to('cpu', torch.uint8).numpy()
-        output_img = self.BGR_to_RGB(output_img)
-
-        return output_img
-    
     def evaluate(self, epoch, mode='val'):
         self.mode = mode
         self.epoch = epoch
@@ -208,7 +141,6 @@ class Trainer():
 
         compute_loss = True
         torch.set_grad_enabled(False)
-        results=[]
         for idx, batch in enumerate(tq):
             input, target = data.common.to(
                 batch[0], batch[1], device=self.device, dtype=self.dtype_eval)
@@ -241,7 +173,7 @@ class Trainer():
 
                     result = result[save_ids]
                     names = [names[save_id] for save_id in save_ids]
-                #results.append(result)
+
                 self.imsaver.save_image(result, names)
 
         if compute_loss:
@@ -254,10 +186,7 @@ class Trainer():
             if self.args.rank == 0:
                 self.save()
 
-        return #results
-
-
-
+        self.imsaver.end_background()
 
     def validate(self, epoch):
         self.evaluate(epoch, 'val')
