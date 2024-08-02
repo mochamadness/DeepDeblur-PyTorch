@@ -255,7 +255,7 @@ def setup(args):
         # initialize the process group
         dist.init_process_group(args.dist_backend, init_method=args.init_method, rank=args.rank, world_size=args.world_size)
 
-    args.device = torch.device(args.device_type, args.device_index) if args.device_type == 'cuda' else torch.device(args.device_type)
+    args.device = torch.device(args.device_type, args.device_index)
     args.dtype = torch.float32
     args.dtype_eval = torch.float32 if args.precision == 'single' else torch.float16
 

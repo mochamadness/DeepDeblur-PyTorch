@@ -15,7 +15,7 @@ class Demo(Dataset):
         super(Demo, self).set_keys()
         self.blur_key = ''              # all the files
         self.non_sharp_keys = ['']      # no files
-
+    
     def __getitem__(self, idx):
         blur, sharp, pad_width, idx, relpath = super(Demo, self).__getitem__(idx)
 
